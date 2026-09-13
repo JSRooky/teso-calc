@@ -51,6 +51,13 @@ export const SKILL_ICONS: Record<string, string> = {
   stampede: "ability_2handed_003_a",
   "rapid-strikes": "ability_dualwield_002_b",
   "puncturing-remedy": "ability_1handed_002",
+  "standard-of-might": "ability_dragonknight_006_b",
+  "storm-atronach": "ability_sorcerer_storm_atronach",
+  "soul-harvest": "ability_nightblade_007_b",
+  "radial-sweep": "ability_templar_radial_sweep",
+  "wild-guardian": "ability_warden_018_c",
+  "glacial-colossus": "ability_necromancer_006_a",
+  "tide-kings-gaze": "ability_arcanist_006_a",
 };
 
 export const META_ICONS = {

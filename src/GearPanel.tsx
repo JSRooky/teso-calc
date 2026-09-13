@@ -13,30 +13,38 @@ import {
   sets,
   slotKind,
   traits,
+  type GearMix,
   type Loadout,
   type SlotId,
   type WeaponKind,
 } from "./engine/gear";
 import type { ArmorWeight } from "./engine/types";
 
-type Filter = "all" | "craft" | "drop";
+const MIX_LABEL: { id: GearMix; title: string; hint: string }[] = [
+  { id: "craft", title: "Только крафт", hint: "Два крафтовых 5pc, без данжей и триалов." },
+  { id: "drop", title: "Только дроп", hint: "Оверленд, данж, триал, монстр, мифик." },
+  { id: "mixed", title: "Дроп и крафт", hint: "Крафт на теле, дроп на бижутерии и оружии." },
+];
 
-function setsFor(filter: Filter, slot: SlotId) {
+function setsFor(filter: GearMix, currentId: string) {
   return sets.filter((s) => {
-    if (s.id === "none") return true;
-    if (filter === "craft" && !isCrafted(s.source)) return false;
-    if (filter === "drop" && isCrafted(s.source)) return false;
-    if (s.source === "monster" && slotKind(slot) !== "armor") return false;
+    if (s.id === "none" || s.id === currentId) return true;
+    if (filter === "craft") return isCrafted(s.source);
+    if (filter === "drop") return !isCrafted(s.source);
     return true;
   });
 }
 
 export function GearPanel({
   loadout,
+  mix,
   onChange,
+  onMix,
 }: {
   loadout: Loadout;
+  mix: GearMix;
   onChange: (next: Loadout) => void;
+  onMix: (mix: GearMix) => void;
 }) {
   const breakdown = evaluateLoadout(loadout);
 
@@ -47,28 +55,43 @@ export function GearPanel({
   return (
     <section className="panel">
       <h2>Экипировка · сеты, оружие, зачарования</h2>
+      <div className="mix-toggle" role="tablist" aria-label="Источник сетов">
+        {MIX_LABEL.map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            role="tab"
+            aria-selected={mix === m.id}
+            className={mix === m.id ? "mix on" : "mix"}
+            onClick={() => onMix(m.id)}
+          >
+            <strong>{m.title}</strong>
+            <span>{m.hint}</span>
+          </button>
+        ))}
+      </div>
       <p className="hint">
-        Крафт собирается в любом весе и с вашими глифами. Дроп (оверленд, данж, триал, арена, монстр,
-        мифик, ПвП) только выбивается — но слоты те же. Оружие на обоих барах даёт и сеты, и силу.
+        Переключатель ставит готовую раскладку под текущую цель. Слоты ниже можно править вручную.
+        Оружие на обоих барах даёт и сеты, и силу.
       </p>
       <div className="preset-row">
         {(
           [
-            ["mag-dps", "Пресет маг-DPS (крафт Julianos + дроп Mother’s Sorrow)"],
-            ["stam-dps", "Пресет стам-DPS (крафт Hunding + триал Relequen)"],
-            ["healer", "Пресет хилер (крафт Kagrenac + данж SPC)"],
-            ["tank", "Пресет танк (крафт Brass + данж Turning Tide)"],
-            ["regen", "Пресет реген (крафт Ива + мифик Oakensoul)"],
+            ["mag-dps", "Маг-DPS"],
+            ["stam-dps", "Стам-DPS"],
+            ["healer", "Хилер"],
+            ["tank", "Танк"],
+            ["regen", "Реген"],
           ] as const
         ).map(([id, label]) => (
-          <button key={id} type="button" className="ghost" onClick={() => onChange(presetLoadout(id))}>
+          <button key={id} type="button" className="ghost" onClick={() => onChange(presetLoadout(id, mix))}>
             {label}
           </button>
         ))}
       </div>
-      <SlotTable title="Броня" slots={ARMOR_SLOTS} loadout={loadout} patch={patch} armor />
-      <SlotTable title="Бижутерия" slots={JEWEL_SLOTS} loadout={loadout} patch={patch} />
-      <SlotTable title="Оружие (фронт и бэк)" slots={WEAPON_SLOTS} loadout={loadout} patch={patch} weapon />
+      <SlotTable title="Броня" slots={ARMOR_SLOTS} loadout={loadout} patch={patch} armor mix={mix} />
+      <SlotTable title="Бижутерия" slots={JEWEL_SLOTS} loadout={loadout} patch={patch} mix={mix} />
+      <SlotTable title="Оружие (фронт и бэк)" slots={WEAPON_SLOTS} loadout={loadout} patch={patch} weapon mix={mix} />
       <div className="set-summary">
         {breakdown.setCounts.map(({ set, count }) => (
           <span key={set.id} className={isCrafted(set.source) ? "tag craft" : "tag drop"}>
@@ -96,6 +119,7 @@ function SlotTable({
   patch,
   armor,
   weapon,
+  mix,
 }: {
   title: string;
   slots: SlotId[];
@@ -103,6 +127,7 @@ function SlotTable({
   patch: (slot: SlotId, piece: Partial<Loadout[SlotId]>) => void;
   armor?: boolean;
   weapon?: boolean;
+  mix: GearMix;
 }) {
   return (
     <div className="slot-block">
@@ -112,9 +137,14 @@ function SlotTable({
         const kind = slotKind(slot);
         const main = slot === "frontOff" ? loadout.frontMain : slot === "backOff" ? loadout.backMain : undefined;
         const locked = Boolean(main && isTwoHanded(main.weaponKind));
-        const filterSets = (f: Filter) => setsFor(f, slot);
+        const opts = setsFor(mix, piece.setId).filter((s) => {
+          if (s.source === "monster" && slotKind(slot) !== "armor") return false;
+          return true;
+        });
         const traitOpts = traits.filter((t) => t.slots === kind || t.slots === "any");
         const enchOpts = enchants.filter((e) => e.slots === kind || e.slots === "any");
+        const craftOpts = opts.filter((s) => s.id === "none" || isCrafted(s.source));
+        const dropOpts = opts.filter((s) => s.id !== "none" && !isCrafted(s.source));
         return (
           <div key={slot} className={locked ? "slot-row dim" : "slot-row"}>
             <div className="slot-name">{SLOT_LABEL[slot]}</div>
@@ -123,20 +153,30 @@ function SlotTable({
             ) : (
               <>
                 <select value={piece.setId} onChange={(e) => patch(slot, { setId: e.target.value })}>
-                  <optgroup label="Крафт">
-                    {filterSets("craft").map((s) => (
+                  {mix === "mixed" ? (
+                    <>
+                      <optgroup label="Крафт">
+                        {craftOpts.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Дроп">
+                        {dropOpts.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} — {s.where}
+                          </option>
+                        ))}
+                      </optgroup>
+                    </>
+                  ) : (
+                    opts.map((s) => (
                       <option key={s.id} value={s.id}>
-                        {s.name}
+                        {s.id === "none" ? s.name : mix === "drop" ? `${s.name} — ${s.where}` : s.name}
                       </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Только дроп">
-                    {filterSets("drop").map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} — {s.where}
-                      </option>
-                    ))}
-                  </optgroup>
+                    ))
+                  )}
                 </select>
                 <select value={piece.traitId} onChange={(e) => patch(slot, { traitId: e.target.value })}>
                   {traitOpts.map((t) => (

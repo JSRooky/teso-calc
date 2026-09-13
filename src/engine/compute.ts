@@ -15,9 +15,14 @@ import {
   mundus,
   races,
   skillLinesForClass,
-  weaponSkillLines,
 } from "./catalog";
-import { evaluateLoadout, presetLoadout, type Loadout } from "./gear";
+import {
+  evaluateLoadout,
+  presetKindForGoal,
+  presetLoadout,
+  type GearMix,
+  type Loadout,
+} from "./gear";
 import { goals } from "./goals";
 import { META_ICONS, skillIconFile } from "./icons";
 import { addMods, emptyMods, scaleMods } from "./mods";
@@ -38,6 +43,7 @@ export type BuildInput = {
   foodId: string;
   attributes: Attributes;
   loadout: Loadout;
+  gearMix: GearMix;
   frontBar: SkillBar;
   backBar: SkillBar;
   passiveIds: string[];
@@ -88,6 +94,46 @@ export function equippedSkillIds(input: BuildInput): string[] {
 
 export function emptyBar(): SkillBar {
   return { slots: [null, null, null, null, null], ultimate: null };
+}
+
+function asSlots(slots: (string | null)[]): SkillBar["slots"] {
+  return [slots[0] ?? null, slots[1] ?? null, slots[2] ?? null, slots[3] ?? null, slots[4] ?? null];
+}
+
+/** Put a skill on a bar slot; if it already sits elsewhere, swap so the hotkey stays unique. */
+export function setBarSlot(bar: SkillBar, index: number, id: string | null): SkillBar {
+  const slots = [...bar.slots];
+  if (!id) {
+    slots[index] = null;
+    return { ...bar, slots: asSlots(slots) };
+  }
+  const existing = slots.indexOf(id);
+  if (existing === index) return bar;
+  if (existing >= 0) {
+    slots[existing] = slots[index];
+    slots[index] = id;
+  } else {
+    slots[index] = id;
+  }
+  return { ...bar, slots: asSlots(slots) };
+}
+
+/** If the skill is also on the other bar, move it to the same slot (swap). */
+export function mirrorSlot(other: SkillBar, index: number, id: string | null): SkillBar {
+  if (!id || !other.slots.includes(id)) return other;
+  return setBarSlot(other, index, id);
+}
+
+/** After both bars are filled, shared skills take the front bar's slot numbers. */
+export function syncSharedSlots(front: SkillBar, back: SkillBar): SkillBar {
+  let next = back;
+  front.slots.forEach((id, i) => {
+    if (id && next.slots.includes(id)) next = setBarSlot(next, i, id);
+  });
+  if (front.ultimate && next.ultimate === front.ultimate) {
+    next = { ...next, ultimate: front.ultimate };
+  }
+  return next;
 }
 
 export function compute(input: BuildInput): {
@@ -229,58 +275,74 @@ export function optimizeAttributes(base: Omit<BuildInput, "attributes">): Attrib
 }
 
 function fillBar(ids: (string | null | undefined)[], ult?: string | null): SkillBar {
-  const clean = ids.filter((id): id is string => Boolean(id));
+  const seen = new Set<string>();
   const slots: SkillBar["slots"] = [null, null, null, null, null];
-  clean.slice(0, 5).forEach((id, i) => {
+  for (const id of ids) {
+    if (!id || seen.has(id)) continue;
+    const i = slots.indexOf(null);
+    if (i < 0) break;
     slots[i] = id;
-  });
+    seen.add(id);
+  }
   return { slots, ultimate: ult ?? null };
 }
 
-export function suggestForGoal(goalId: GoalId, classId: string): BuildInput {
+export function suggestForGoal(goalId: GoalId, classId: string, gearMix: GearMix = "mixed"): BuildInput {
   const goal = goals.find((g) => g.id === goalId) ?? goals[0];
   const cls = classes.find((c) => c.id === classId) ?? classes[0];
   const classSkills = skillLinesForClass(cls.id).flatMap((l) => l.skills);
-  const weap = weaponSkillLines().flatMap((l) => l.skills);
   const pick = (list: SkillDef[], pred: (s: SkillDef) => boolean, n: number) =>
     list.filter(pred).slice(0, n).map((s) => s.id);
 
-  const dmg = pick(classSkills, (s) => s.kind === "active" && !s.isHeal, 3);
-  const heals = pick(classSkills, (s) => Boolean(s.isHeal), 2);
-  const ult = classSkills.find((s) => s.kind === "ultimate")?.id ?? null;
+  const dmg = pick(classSkills, (s) => s.kind === "active" && !s.isHeal, 8);
+  const heals = pick(classSkills, (s) => Boolean(s.isHeal) && s.kind !== "ultimate", 4);
+  const shields = pick(
+    classSkills,
+    (s) => s.kind === "active" && Boolean(s.mods?.physicalResist || s.mods?.healthPct),
+    2,
+  );
+  const ult =
+    classSkills.find((s) => s.kind === "ultimate" && !s.isHeal)?.id ??
+    classSkills.find((s) => s.kind === "ultimate")?.id ??
+    null;
   const passives = pick(classSkills, (s) => s.kind === "passive", 4);
 
-  const wall = weap.find((s) => s.id === "wall-of-elements")?.id ?? null;
-  const hail = weap.find((s) => s.id === "endless-hail")?.id ?? null;
-  const springs = weap.find((s) => s.id === "healing-springs")?.id ?? null;
-  const prayer = weap.find((s) => s.id === "combat-prayer")?.id ?? null;
-  const taunt = weap.find((s) => s.id === "puncturing-remedy")?.id ?? null;
+  const wall = "wall-of-elements";
+  const hail = "endless-hail";
+  const springs = "healing-springs";
+  const prayer = "combat-prayer";
+  const taunt = "puncturing-remedy";
+  const shock = "crushing-shock";
+  const poison = "poison-injection";
+  const dw = "rapid-strikes";
+  const twoh = "stampede";
 
-  let loadout = presetLoadout("mag-dps");
-  let front = fillBar(dmg);
-  let back = fillBar([wall, ...dmg.slice(2)], ult);
+  const magWeapons = [shock, wall, springs, prayer];
+  const stamWeapons = [dw, hail, poison, twoh];
+
+  const kind = presetKindForGoal(goalId);
+  const loadout = presetLoadout(kind, gearMix);
+  let front = fillBar([...dmg, ...shields, ...heals, ...magWeapons], ult);
+  let back = fillBar([wall, ...dmg.slice(1), springs, ...heals, shock, ...shields], ult);
 
   if (goalId === "max-heal") {
-    loadout = presetLoadout("healer");
-    front = fillBar([...heals, prayer, springs]);
-    back = fillBar([wall, springs, ...heals], ult);
+    front = fillBar([...heals, prayer, springs, ...dmg, ...shields], ult);
+    back = fillBar([wall, springs, prayer, ...heals, ...dmg], ult);
   } else if (goalId === "tank") {
-    loadout = presetLoadout("tank");
-    front = fillBar([taunt, ...heals, ...dmg]);
-    back = fillBar([wall, taunt, ...heals], ult);
+    front = fillBar([taunt, ...shields, ...heals, springs, ...dmg], ult);
+    back = fillBar([wall, taunt, springs, ...heals, ...shields, ...dmg], ult);
   } else if (goalId === "max-hp-regen" || goalId === "max-resource-regen") {
-    loadout = presetLoadout("regen");
-    front = fillBar([...heals, ...dmg]);
-    back = fillBar([springs, wall, ...heals], ult);
+    front = fillBar([...heals, springs, ...shields, ...dmg, prayer], ult);
+    back = fillBar([springs, wall, prayer, ...heals, ...dmg], ult);
   } else if (goalId === "balanced-dps-sustain") {
-    loadout = presetLoadout("mag-dps");
-    front = fillBar(dmg);
-    back = fillBar([wall, ...heals, ...dmg], ult);
-  } else if (goal.preferredGear === "stam-dps") {
-    loadout = presetLoadout("stam-dps");
-    front = fillBar(dmg);
-    back = fillBar([hail, ...dmg], ult);
+    front = fillBar([...dmg, springs, ...heals, ...shields, shock], ult);
+    back = fillBar([wall, springs, ...heals, ...dmg, shock], ult);
+  } else if (kind === "stam-dps") {
+    front = fillBar([...dmg, ...stamWeapons, ...heals], ult);
+    back = fillBar([hail, poison, ...dmg, ...stamWeapons, ...heals], ult);
   }
+
+  back = syncSharedSlots(front, back);
 
   const raceId =
     goalId === "tank" ? "nord" : goalId === "max-heal" ? "argonian" : "high-elf";
@@ -298,6 +360,7 @@ export function suggestForGoal(goalId: GoalId, classId: string): BuildInput {
     mundusId: goal.preferredMundus[0],
     foodId: goal.preferredFood[0],
     loadout,
+    gearMix,
     frontBar: front,
     backBar: back,
     passiveIds: passives,

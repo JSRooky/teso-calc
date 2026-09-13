@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import { GearPanel } from "./GearPanel";
+import { LevelingDiagram } from "./LevelingDiagram";
 import { SkillBars } from "./SkillBars";
+import { SustainFixes } from "./SustainFixes";
+import { SustainPanel } from "./SustainPanel";
 import { classes, foods, mundus, races } from "./engine/catalog";
 import {
   compute,
@@ -10,6 +13,7 @@ import {
   suggestForGoal,
   type BuildInput,
 } from "./engine/compute";
+import { presetKindForGoal, presetLoadout } from "./engine/gear";
 import { goals } from "./engine/goals";
 
 function fmt(n: number) {
@@ -22,6 +26,8 @@ function pct(n: number) {
 
 export default function App() {
   const [build, setBuild] = useState<BuildInput>(() => suggestForGoal("max-damage", "arcanist"));
+  const [potionId, setPotionId] = useState("essence-mag");
+  const [potionCooldown, setPotionCooldown] = useState(45);
   const result = useMemo(() => compute(build), [build]);
   const plan = useMemo(() => levelingPlan(build), [build]);
   const left = remainingAttributes(build.attributes);
@@ -59,7 +65,7 @@ export default function App() {
           <button
             key={g.id}
             className={build.goalId === g.id ? "goal on" : "goal"}
-            onClick={() => setBuild(suggestForGoal(g.id, build.classId))}
+            onClick={() => setBuild(suggestForGoal(g.id, build.classId, build.gearMix))}
             type="button"
           >
             <strong>{g.name}</strong>
@@ -75,7 +81,7 @@ export default function App() {
             Класс
             <select
               value={build.classId}
-              onChange={(e) => setBuild(suggestForGoal(build.goalId, e.target.value))}
+              onChange={(e) => setBuild(suggestForGoal(build.goalId, e.target.value, build.gearMix))}
             >
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -196,7 +202,14 @@ export default function App() {
         </section>
       </div>
 
-      <GearPanel loadout={build.loadout} onChange={(loadout) => patch({ loadout })} />
+      <GearPanel
+        loadout={build.loadout}
+        mix={build.gearMix}
+        onChange={(loadout) => patch({ loadout })}
+        onMix={(gearMix) =>
+          patch({ gearMix, loadout: presetLoadout(presetKindForGoal(build.goalId), gearMix) })
+        }
+      />
 
       <SkillBars
         classId={build.classId}
@@ -211,21 +224,32 @@ export default function App() {
         onRank={(id, rank) => patch({ skillRanks: { ...build.skillRanks, [id]: rank } })}
       />
 
-      <section className="panel">
-        <h2>Как прокачивать</h2>
-        <ol className="plan">
-          {plan.map((step) => (
-            <li key={step.title}>
-              <strong>{step.title}</strong>
-              <span>{step.detail}</span>
-            </li>
-          ))}
-        </ol>
-      </section>
+      <SustainPanel
+        build={build}
+        stats={result.stats}
+        potionId={potionId}
+        potionCooldown={potionCooldown}
+        onPotion={setPotionId}
+        onCooldown={setPotionCooldown}
+      />
+
+      <SustainFixes
+        build={build}
+        stats={result.stats}
+        potionId={potionId}
+        potionCooldown={potionCooldown}
+        onApply={patch}
+        onPotion={setPotionId}
+      />
+
+      <LevelingDiagram nodes={plan} />
 
       <footer>
-        Статы предметов — золото CP160, порядок величин UESP. Сеты: крафт собирается; остальное
-        помечено как дроп (данж / триал / монстр / мифик / ПвП).
+        Статы предметов — золото CP160. Иконки способностей: текстуры ESOUI через{" "}
+        <a href="https://guildplanner.pro" target="_blank" rel="noreferrer">
+          GuildPlanner
+        </a>{" "}
+        / дамп UESP (июнь 2026). Сеты: крафт собирается; дроп помечен отдельно.
       </footer>
     </div>
   );

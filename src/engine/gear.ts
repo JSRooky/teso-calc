@@ -1,5 +1,5 @@
 import { addMods, emptyMods, scaleMods } from "./mods";
-import type { ArmorWeight, StatMods } from "./types";
+import type { ArmorWeight, GoalId, StatMods } from "./types";
 
 export type SetSource =
   | "craft"
@@ -678,7 +678,53 @@ export function pieceFor(
   return { ...base, setId, ...extras };
 }
 
-export function presetLoadout(kind: "mag-dps" | "stam-dps" | "healer" | "tank" | "regen"): Loadout {
+export type PresetKind = "mag-dps" | "stam-dps" | "healer" | "tank" | "regen";
+export type GearMix = "craft" | "drop" | "mixed";
+
+export function presetKindForGoal(goalId: GoalId): PresetKind {
+  if (goalId === "max-heal") return "healer";
+  if (goalId === "tank") return "tank";
+  if (goalId === "max-hp-regen" || goalId === "max-resource-regen") return "regen";
+  if (goalId === "max-damage" || goalId === "balanced-dps-sustain") return "mag-dps";
+  return "mag-dps";
+}
+
+type MixSets = {
+  body: string;
+  second: string;
+  monster?: string;
+  mythic?: string;
+};
+
+const MIX_SETS: Record<PresetKind, Record<GearMix, MixSets>> = {
+  "mag-dps": {
+    mixed: { body: "julianos", second: "mothers-sorrow", monster: "slimecraw" },
+    craft: { body: "julianos", second: "orders-wrath" },
+    drop: { body: "siroria", second: "mothers-sorrow", monster: "slimecraw" },
+  },
+  "stam-dps": {
+    mixed: { body: "hunding", second: "relequen", monster: "kragh" },
+    craft: { body: "hunding", second: "orders-wrath" },
+    drop: { body: "deadly-strike", second: "relequen", monster: "kragh" },
+  },
+  healer: {
+    mixed: { body: "kagrenacs-hope", second: "spell-power-cure", monster: "earthgore" },
+    craft: { body: "kagrenacs-hope", second: "willows-path" },
+    drop: { body: "jorvuld", second: "spell-power-cure", monster: "earthgore" },
+  },
+  tank: {
+    mixed: { body: "fortified-brass", second: "turning-tide", monster: "bloodspawn" },
+    craft: { body: "fortified-brass", second: "torugs-pact" },
+    drop: { body: "crimson-oath", second: "turning-tide", monster: "bloodspawn" },
+  },
+  regen: {
+    mixed: { body: "willows-path", second: "wretched-vitality", monster: "engine-guardian", mythic: "oakensoul" },
+    craft: { body: "willows-path", second: "wretched-vitality" },
+    drop: { body: "jorvuld", second: "spell-power-cure", monster: "engine-guardian", mythic: "oakensoul" },
+  },
+};
+
+export function presetLoadout(kind: PresetKind, mix: GearMix = "mixed"): Loadout {
   const L = emptyLoadout();
   const body: SlotId[] = ["chest", "hands", "waist", "legs", "feet"];
   const putArmor = (slots: SlotId[], setId: string, weight: ArmorWeight, trait: string, ench: string) => {
@@ -691,55 +737,95 @@ export function presetLoadout(kind: "mag-dps" | "stam-dps" | "healer" | "tank" |
     L[slot] = pieceFor(setId, slot, { weaponKind: wk, traitId: trait, enchantId: ench });
   };
 
+  const { body: bodySet, second, monster, mythic } = MIX_SETS[kind][mix];
+
   if (kind === "mag-dps") {
-    putArmor(body, "julianos", "light", "divines", "armor-mag");
-    L.head = pieceFor("slimecraw", "head", { weight: "light", traitId: "divines", enchantId: "armor-mag" });
-    L.shoulders = pieceFor("slimecraw", "shoulders", { weight: "light", traitId: "divines", enchantId: "armor-mag" });
-    putJewels("mothers-sorrow", "bloodthirsty", "jewel-sd");
-    staff("frontMain", "mothers-sorrow", "inferno", "precise", "wep-berserker");
-    staff("backMain", "mothers-sorrow", "lightning", "infused-weapon", "wep-shock");
+    putArmor(body, bodySet, "light", "divines", "armor-mag");
+    putJewels(second, "bloodthirsty", "jewel-sd");
+    staff("frontMain", second, "inferno", "precise", "wep-berserker");
+    staff("backMain", second, "lightning", "infused-weapon", "wep-shock");
     L.frontOff = { setId: "none", traitId: "precise", enchantId: "wep-berserker" };
     L.backOff = { setId: "none", traitId: "precise", enchantId: "wep-berserker" };
+    if (monster) {
+      L.head = pieceFor(monster, "head", { weight: "light", traitId: "divines", enchantId: "armor-mag" });
+      L.shoulders = pieceFor(monster, "shoulders", { weight: "light", traitId: "divines", enchantId: "armor-mag" });
+    } else {
+      L.head = pieceFor(second, "head", { weight: "light", traitId: "divines", enchantId: "armor-mag" });
+      L.shoulders = pieceFor(second, "shoulders", { weight: "light", traitId: "divines", enchantId: "armor-mag" });
+      L.frontMain = { ...L.frontMain, setId: bodySet };
+      L.backMain = { ...L.backMain, setId: bodySet };
+    }
   } else if (kind === "stam-dps") {
-    putArmor(body, "hunding", "medium", "divines", "armor-stam");
-    L.head = pieceFor("kragh", "head", { weight: "medium", traitId: "divines", enchantId: "armor-stam" });
-    L.shoulders = pieceFor("kragh", "shoulders", { weight: "medium", traitId: "divines", enchantId: "armor-stam" });
-    putJewels("relequen", "bloodthirsty", "jewel-wd");
-    staff("frontMain", "relequen", "bow", "precise", "wep-poison");
-    staff("backMain", "relequen", "bow", "infused-weapon", "wep-poison");
+    putArmor(body, bodySet, "medium", "divines", "armor-stam");
+    putJewels(second, "bloodthirsty", "jewel-wd");
+    staff("frontMain", second, "bow", "precise", "wep-poison");
+    staff("backMain", second, "bow", "infused-weapon", "wep-poison");
+    if (monster) {
+      L.head = pieceFor(monster, "head", { weight: "medium", traitId: "divines", enchantId: "armor-stam" });
+      L.shoulders = pieceFor(monster, "shoulders", { weight: "medium", traitId: "divines", enchantId: "armor-stam" });
+    } else {
+      L.head = pieceFor(second, "head", { weight: "medium", traitId: "divines", enchantId: "armor-stam" });
+      L.shoulders = pieceFor(second, "shoulders", { weight: "medium", traitId: "divines", enchantId: "armor-stam" });
+      L.frontMain = { ...L.frontMain, setId: bodySet };
+      L.backMain = { ...L.backMain, setId: bodySet };
+    }
   } else if (kind === "healer") {
-    putArmor(body, "kagrenacs-hope", "light", "divines", "armor-mag");
-    L.head = pieceFor("earthgore", "head", { weight: "light", traitId: "divines", enchantId: "armor-mag" });
-    L.shoulders = pieceFor("earthgore", "shoulders", { weight: "light", traitId: "divines", enchantId: "armor-mag" });
-    putJewels("spell-power-cure", "arcane", "jewel-magrec");
-    staff("frontMain", "spell-power-cure", "resto", "infused-weapon", "wep-absorb-mag");
-    staff("backMain", "spell-power-cure", "lightning", "infused-weapon", "wep-shock");
+    putArmor(body, bodySet, "light", "divines", "armor-mag");
+    putJewels(second, "arcane", "jewel-magrec");
+    staff("frontMain", second, "resto", "infused-weapon", "wep-absorb-mag");
+    staff("backMain", second, "lightning", "infused-weapon", "wep-shock");
+    if (monster) {
+      L.head = pieceFor(monster, "head", { weight: "light", traitId: "divines", enchantId: "armor-mag" });
+      L.shoulders = pieceFor(monster, "shoulders", { weight: "light", traitId: "divines", enchantId: "armor-mag" });
+    } else {
+      L.head = pieceFor(second, "head", { weight: "light", traitId: "divines", enchantId: "armor-mag" });
+      L.shoulders = pieceFor(second, "shoulders", { weight: "light", traitId: "divines", enchantId: "armor-mag" });
+      L.frontMain = { ...L.frontMain, setId: bodySet };
+      L.backMain = { ...L.backMain, setId: bodySet };
+    }
   } else if (kind === "tank") {
-    putArmor(body, "fortified-brass", "heavy", "reinforced", "armor-hp");
-    L.head = pieceFor("bloodspawn", "head", { weight: "heavy", traitId: "reinforced", enchantId: "armor-hp" });
-    L.shoulders = pieceFor("bloodspawn", "shoulders", { weight: "heavy", traitId: "reinforced", enchantId: "armor-hp" });
-    putJewels("turning-tide", "protective", "jewel-hp");
-    staff("frontMain", "turning-tide", "onehand", "defending", "wep-crushe");
-    L.frontOff = pieceFor("turning-tide", "frontOff", {
+    putArmor(body, bodySet, "heavy", "reinforced", "armor-hp");
+    putJewels(second, "protective", "jewel-hp");
+    staff("frontMain", second, "onehand", "defending", "wep-crushe");
+    L.frontOff = pieceFor(second, "frontOff", {
       weaponKind: "shield",
       traitId: "infused-weapon",
       enchantId: "shield-hp",
     });
-    staff("backMain", "fortified-brass", "frost", "infused-weapon", "wep-crushe");
+    staff("backMain", bodySet, "frost", "infused-weapon", "wep-crushe");
+    if (monster) {
+      L.head = pieceFor(monster, "head", { weight: "heavy", traitId: "reinforced", enchantId: "armor-hp" });
+      L.shoulders = pieceFor(monster, "shoulders", { weight: "heavy", traitId: "reinforced", enchantId: "armor-hp" });
+    } else {
+      L.head = pieceFor(second, "head", { weight: "heavy", traitId: "reinforced", enchantId: "armor-hp" });
+      L.shoulders = pieceFor(second, "shoulders", { weight: "heavy", traitId: "reinforced", enchantId: "armor-hp" });
+    }
   } else {
-    putArmor(body, "willows-path", "light", "infused-armor", "armor-prism");
-    L.head = pieceFor("engine-guardian", "head", { weight: "light", traitId: "infused-armor", enchantId: "armor-hp" });
-    L.shoulders = pieceFor("engine-guardian", "shoulders", {
-      weight: "light",
-      traitId: "infused-armor",
-      enchantId: "armor-hp",
-    });
-    putJewels("wretched-vitality", "infused-jewel", "jewel-hprec");
-    L.neck = pieceFor("wretched-vitality", "neck", { traitId: "infused-jewel", enchantId: "jewel-magrec" });
-    L.ring1 = pieceFor("wretched-vitality", "ring1", { traitId: "infused-jewel", enchantId: "jewel-stamrec" });
-    L.ring2 = pieceFor("oakensoul", "ring2", { traitId: "healthy", enchantId: "jewel-hprec" });
-    staff("frontMain", "willows-path", "resto", "infused-weapon", "wep-absorb-hp");
-    staff("backMain", "willows-path", "frost", "infused-weapon", "wep-absorb-mag");
+    putArmor(body, bodySet, "light", "infused-armor", "armor-prism");
+    putJewels(second, "infused-jewel", "jewel-hprec");
+    L.neck = pieceFor(second, "neck", { traitId: "infused-jewel", enchantId: "jewel-magrec" });
+    L.ring1 = pieceFor(second, "ring1", { traitId: "infused-jewel", enchantId: "jewel-stamrec" });
+    L.ring2 = pieceFor(second, "ring2", { traitId: "infused-jewel", enchantId: "jewel-hprec" });
+    staff("frontMain", bodySet, "resto", "infused-weapon", "wep-absorb-hp");
+    staff("backMain", bodySet, "frost", "infused-weapon", "wep-absorb-mag");
+    if (monster) {
+      L.head = pieceFor(monster, "head", { weight: "light", traitId: "infused-armor", enchantId: "armor-hp" });
+      L.shoulders = pieceFor(monster, "shoulders", {
+        weight: "light",
+        traitId: "infused-armor",
+        enchantId: "armor-hp",
+      });
+    } else {
+      L.head = pieceFor(second, "head", { weight: "light", traitId: "infused-armor", enchantId: "armor-hp" });
+      L.shoulders = pieceFor(second, "shoulders", {
+        weight: "light",
+        traitId: "infused-armor",
+        enchantId: "armor-hp",
+      });
+    }
+    if (mythic) {
+      L.ring2 = pieceFor(mythic, "ring2", { traitId: "healthy", enchantId: "jewel-hprec" });
+    }
   }
   return L;
 }
