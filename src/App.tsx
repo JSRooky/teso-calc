@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { GearPanel } from "./GearPanel";
 import { LevelingDiagram } from "./LevelingDiagram";
+import { RotationPanel } from "./RotationPanel";
 import { SkillBars } from "./SkillBars";
 import { SustainFixes } from "./SustainFixes";
 import { SustainPanel } from "./SustainPanel";
@@ -13,6 +14,7 @@ import {
   suggestForGoal,
   type BuildInput,
 } from "./engine/compute";
+import { computeRotation } from "./engine/rotation";
 import { presetKindForGoal, presetLoadout } from "./engine/gear";
 import { goals } from "./engine/goals";
 
@@ -29,6 +31,7 @@ export default function App() {
   const [potionId, setPotionId] = useState("essence-mag");
   const [potionCooldown, setPotionCooldown] = useState(45);
   const result = useMemo(() => compute(build), [build]);
+  const rotation = useMemo(() => computeRotation(build, result.stats), [build, result.stats]);
   const plan = useMemo(() => levelingPlan(build), [build]);
   const left = remainingAttributes(build.attributes);
 
@@ -54,10 +57,6 @@ export default function App() {
       <header className="hero">
         <p className="kicker">The Elder Scrolls Online</p>
         <h1>Калькулятор и планировщик билдов</h1>
-        <p className="lede">
-          Цель, затем слоты как в игре: крафтовые сеты (Julianos, Hunding, Гнев Ордена…) и дроп
-          (триалы, данжи, монстры, мифики). Два бара 5+1 и зачарования CP160 gold.
-        </p>
       </header>
 
       <section className="goals">
@@ -68,8 +67,7 @@ export default function App() {
             onClick={() => setBuild(suggestForGoal(g.id, build.classId, build.gearMix))}
             type="button"
           >
-            <strong>{g.name}</strong>
-            <span>{g.tagline}</span>
+            {g.name}
           </button>
         ))}
       </section>
@@ -90,7 +88,6 @@ export default function App() {
               ))}
             </select>
           </label>
-          <p className="hint">{classes.find((c) => c.id === build.classId)?.description}</p>
           <label>
             Раса
             <select value={build.raceId} onChange={(e) => patch({ raceId: e.target.value })}>
@@ -106,7 +103,7 @@ export default function App() {
             <select value={build.mundusId} onChange={(e) => patch({ mundusId: e.target.value })}>
               {mundus.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.name} — {m.note}
+                  {m.name}
                 </option>
               ))}
             </select>
@@ -197,7 +194,7 @@ export default function App() {
               k="Сопр. физ / маг"
               v={`${fmt(result.stats.physicalResist)} / ${fmt(result.stats.spellResist)}`}
             />
-            <Stat k="Оценка цели" v={fmt(Math.round(result.score))} />
+            <Stat k="DPS ротации" v={fmt(rotation.dps)} />
           </dl>
         </section>
       </div>
@@ -224,6 +221,8 @@ export default function App() {
         onRank={(id, rank) => patch({ skillRanks: { ...build.skillRanks, [id]: rank } })}
       />
 
+      <RotationPanel rot={rotation} />
+
       <SustainPanel
         build={build}
         stats={result.stats}
@@ -243,14 +242,6 @@ export default function App() {
       />
 
       <LevelingDiagram nodes={plan} />
-
-      <footer>
-        Статы предметов — золото CP160. Иконки способностей: текстуры ESOUI через{" "}
-        <a href="https://guildplanner.pro" target="_blank" rel="noreferrer">
-          GuildPlanner
-        </a>{" "}
-        / дамп UESP (июнь 2026). Сеты: крафт собирается; дроп помечен отдельно.
-      </footer>
     </div>
   );
 }

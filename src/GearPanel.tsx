@@ -20,10 +20,10 @@ import {
 } from "./engine/gear";
 import type { ArmorWeight } from "./engine/types";
 
-const MIX_LABEL: { id: GearMix; title: string; hint: string }[] = [
-  { id: "craft", title: "Только крафт", hint: "Два крафтовых 5pc, без данжей и триалов." },
-  { id: "drop", title: "Только дроп", hint: "Оверленд, данж, триал, монстр, мифик." },
-  { id: "mixed", title: "Дроп и крафт", hint: "Крафт на теле, дроп на бижутерии и оружии." },
+const MIX_LABEL: { id: GearMix; title: string }[] = [
+  { id: "craft", title: "Только крафт" },
+  { id: "drop", title: "Только дроп" },
+  { id: "mixed", title: "Дроп и крафт" },
 ];
 
 function setsFor(filter: GearMix, currentId: string) {
@@ -65,15 +65,10 @@ export function GearPanel({
             className={mix === m.id ? "mix on" : "mix"}
             onClick={() => onMix(m.id)}
           >
-            <strong>{m.title}</strong>
-            <span>{m.hint}</span>
+            {m.title}
           </button>
         ))}
       </div>
-      <p className="hint">
-        Переключатель ставит готовую раскладку под текущую цель. Слоты ниже можно править вручную.
-        Оружие на обоих барах даёт и сеты, и силу.
-      </p>
       <div className="preset-row">
         {(
           [

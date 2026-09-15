@@ -17,10 +17,6 @@ export function LevelingDiagram({ nodes }: { nodes: LevelingNode[] }) {
   return (
     <section className="panel">
       <h2>Диаграмма прокачки</h2>
-      <p className="hint">
-        Иконки — актуальные текстуры ESOUI (дамп GuildPlanner / UESP, июнь 2026). Читайте слева
-        направо: атрибуты → крафт → дроп → способности → чемпионские очки.
-      </p>
       <div className="diagram" role="list">
         {phases.map((phase, pi) => (
           <div key={phase} className="diagram-col" role="listitem">
@@ -32,7 +28,6 @@ export function LevelingDiagram({ nodes }: { nodes: LevelingNode[] }) {
                   <EsoIcon file={n.icon} alt={n.title} size={52} />
                   <div>
                     <strong>{n.title}</strong>
-                    <span>{n.detail}</span>
                   </div>
                 </article>
               ))}

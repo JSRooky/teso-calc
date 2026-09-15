@@ -64,10 +64,6 @@ export function SkillBars({
   return (
     <section className="panel">
       <h2>Полный бар · фронт и бэк (5 + ульта)</h2>
-      <p className="hint">
-        Один и тот же скилл на обоих барах всегда в одном слоте — та же кнопка, не надо
-        переучиваться. Если сдвинуть его на одном баре, на втором он переедет в тот же номер.
-      </p>
       <div className="bars">
         <BarColumn
           title="Фронтбар"

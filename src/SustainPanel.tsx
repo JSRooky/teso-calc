@@ -15,7 +15,7 @@ const ROLE: Record<string, string> = {
   spam: "спам",
   channel: "канал",
   maintain: "поддержание",
-  ultimate: "ульта (не мага/стам)",
+  ultimate: "ульта",
 };
 
 export function SustainPanel({
@@ -39,11 +39,6 @@ export function SustainPanel({
   return (
     <section className="panel">
       <h2>Сустейн · расход магии и запаса сил</h2>
-      <p className="hint">
-        Стоимость — золото CP160 с UESP. Спам на фронте считается как основной (канал или самая
-        дорогая способность раз в ~1.1 с); остальные спамы — реже, иначе три скилла не жмутся
-        одновременно. Реген с листа: Recovery ÷ 2 (тик раз в 2 с). Банки по умолчанию 45 с.
-      </p>
       <div className="sustain-controls">
         <label>
           Банка
@@ -67,8 +62,6 @@ export function SustainPanel({
           />
         </label>
       </div>
-      <p className="hint">{potion.note}</p>
-
       <table className="sustain-table">
         <thead>
           <tr>

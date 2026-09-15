@@ -51,10 +51,6 @@ export function SustainFixes({
   return (
     <section className="panel">
       <h2>Как закрыть расход</h2>
-      <p className="hint">
-        Сначала максимум сустейна, ниже — близкие варианты (меньше потеря урона). На плашке
-        превью после выбора: реген, изменение силы и оценка баланса под вашу цель.
-      </p>
       <FixGroup title="Максимум сустейна" tips={maxTips} onRun={run} />
       <FixGroup title="Близкие варианты" tips={nearTips} onRun={run} />
     </section>
@@ -86,7 +82,6 @@ function FixGroup({
               </em>
               <strong>{t.title}</strong>
             </header>
-            <p className="fix-detail">{t.detail}</p>
             <p className="hit">{t.gain}</p>
             {t.preview && (
               <div className="balance">

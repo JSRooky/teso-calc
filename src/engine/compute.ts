@@ -75,6 +75,14 @@ export type DerivedStats = {
   maxDamage: number;
 };
 
+export function skillBaseHit(skill: SkillDef, stats: DerivedStats, rank: number): number {
+  const r = Math.min(skill.maxRank, Math.max(1, rank));
+  const rankScale = 0.85 + 0.05 * r;
+  const raw =
+    (skill.maxStatCoeff * stats.maxStat + skill.maxDamageCoeff * stats.maxDamage) * rankScale;
+  return raw * (1 + stats.critChance * stats.critDamage);
+}
+
 export type SkillForecast = {
   skill: SkillDef;
   rank: number;
@@ -224,12 +232,9 @@ export function compute(input: BuildInput): {
     .filter((s) => s.maxStatCoeff > 0 || s.maxDamageCoeff > 0)
     .map((skill) => {
       const rank = Math.min(skill.maxRank, Math.max(1, input.skillRanks[skill.id] ?? skill.maxRank));
-      const rankScale = 0.85 + 0.05 * rank;
-      const raw =
-        (skill.maxStatCoeff * stats.maxStat + skill.maxDamageCoeff * stats.maxDamage) * rankScale;
-      const critAvg = 1 + stats.critChance * stats.critDamage;
+      const base = skillBaseHit(skill, stats, rank);
       const done = skill.isHeal ? 1 + stats.healingDonePct : 1 + stats.damageDonePct;
-      const hit = Math.round(raw * critAvg * done);
+      const hit = Math.round(base * done);
       const ticks = skill.ticks ?? 1;
       const duration = skill.duration ?? 1;
       const perSecond = Math.round((hit * (skill.isDot ? ticks : 1)) / Math.max(duration, 1));
